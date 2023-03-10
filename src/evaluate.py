@@ -1,17 +1,18 @@
-from __future__ import division
-from __future__ import print_function
+from __future__ import division, print_function
+
 import sys
+
 sys.path.append('../../')
-import json
 import argparse
-import numpy as np
-import os
-import pandas as pd
 import pickle
+
+import numpy as np
+import pandas as pd
 import torch
 from torch_geometric.utils import dense_to_sparse
+
 from gcn import GCNSynthetic
-from utils.utils import normalize_adj, get_neighbourhood
+from utils.utils import get_neighbourhood, normalize_adj
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--path', help='Filepath of CF example dataset')
@@ -19,9 +20,10 @@ args = parser.parse_args()
 
 print(args)
 
-
-header = ["node_idx", "new_idx", "cf_adj", "sub_adj", "y_pred_orig", "y_pred_new", "y_pred_new_actual",
-            "label", "num_nodes", "loss_total", "loss_pred", "loss_graph_dist"]
+header = [
+	"node_idx", "new_idx", "cf_adj", "sub_adj", "y_pred_orig", "y_pred_new",
+	"y_pred_new_actual", "label", "num_nodes", "loss_total", "loss_pred", "loss_graph_dist"
+]
 hidden = 20
 dropout = 0.0
 
@@ -50,7 +52,6 @@ model.eval()
 output = model(features, norm_adj)
 y_pred_orig = torch.argmax(output, dim=1)
 
-
 # Load CF examples
 with open(args.path, "rb") as f:
 	cf_examples = pickle.load(f)
@@ -60,13 +61,11 @@ with open(args.path, "rb") as f:
 			df_prep.append(example[0])
 	df = pd.DataFrame(df_prep, columns=header)
 
-
 # Add num edges
 num_edges = []
 for i in df.index:
 	num_edges.append(sum(sum(df["sub_adj"][i])) / 2)
 df["num_edges"] = num_edges
-
 
 # For accuracy, only look at motif nodes
 df_motif = df[df["y_pred_orig"] != 0].reset_index(drop=True)
@@ -76,7 +75,7 @@ dict_ypred_orig = dict(zip(sorted(np.concatenate((idx_train.numpy(), idx_test.nu
 for i in range(len(df_motif)):
 	node_idx = df_motif["node_idx"][i]
 	new_idx = df_motif["new_idx"][i]
-	_, _, _, node_dict = get_neighbourhood(int(node_idx), edge_index, 4, features, labels)
+	__, __, __, node_dict = get_neighbourhood(int(node_idx), edge_index, 4, features, labels)
 
 	# Confirm idx mapping is correct
 	if node_dict[node_idx] == df_motif["new_idx"][i]:
@@ -100,20 +99,20 @@ for i in range(len(df_motif)):
 		nodes_in_motif = perturb_nodes_orig_ypred[perturb_nodes_orig_ypred != 0]
 		prop_correct = len(nodes_in_motif) / len(perturb_nodes_orig_idx)
 
-		accuracy.append([node_idx, new_idx, perturb_nodes_orig_idx,
-		                 perturb_nodes_orig_ypred, nodes_in_motif, prop_correct])
+		accuracy.append([
+			node_idx, new_idx, perturb_nodes_orig_idx, perturb_nodes_orig_ypred, nodes_in_motif, prop_correct
+		])
 
-df_accuracy = pd.DataFrame(accuracy, columns=["node_idx", "new_idx", "perturb_nodes_orig_idx",
-                                              "perturb_nodes_orig_ypred", "nodes_in_motif", "prop_correct"])
-
-
+df_accuracy = pd.DataFrame(accuracy, columns=[
+	"node_idx", "new_idx", "perturb_nodes_orig_idx", "perturb_nodes_orig_ypred", "nodes_in_motif", "prop_correct"
+])
 
 print(args.path)
 print("Num cf examples found: {}/{}".format(len(df), len(idx_test)))
 print("Avg fidelity: {}".format(1 - len(df) / len(idx_test)))
 print("Average graph distance: {}, std: {}".format(np.mean(df["loss_graph_dist"]), np.std(df["loss_graph_dist"])))
-print("Average sparsity: {}, std: {}".format(np.mean(1 - df["loss_graph_dist"] / df["num_edges"]), np.std(1 - df["loss_graph_dist"] / df["num_edges"])))
+print("Average sparsity: {}, std: {}".format(
+	np.mean(1 - df["loss_graph_dist"] / df["num_edges"]), np.std(1 - df["loss_graph_dist"] / df["num_edges"])
+))
 print("Accuracy", np.mean(df_accuracy["prop_correct"]), np.std(df_accuracy["prop_correct"]))
-print(" ")
-print("***************************************************************")
-print(" ")
+print("\n***************************************************************\n")

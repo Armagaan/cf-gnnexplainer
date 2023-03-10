@@ -1,12 +1,11 @@
 # Based on https://github.com/tkipf/pygcn/blob/master/pygcn/
 
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-from torch_geometric.nn import GCNConv
-
 
 
 class GraphConvolution(nn.Module):

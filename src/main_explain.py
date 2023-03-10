@@ -1,18 +1,19 @@
-from __future__ import division
-from __future__ import print_function
+from __future__ import division, print_function
+
 import sys
+
 sys.path.append('..')
 import argparse
 import pickle
-import numpy as np
 import time
+
+import numpy as np
 import torch
-from gcn import GCNSynthetic
-from cf_explanation.cf_explainer import CFExplainer
-from utils.utils import normalize_adj, get_neighbourhood, safe_open
 from torch_geometric.utils import dense_to_sparse
 
-
+from cf_explanation.cf_explainer import CFExplainer
+from gcn import GCNSynthetic
+from utils.utils import get_neighbourhood, normalize_adj, safe_open
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', default='syn1')
@@ -39,37 +40,40 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.autograd.set_detect_anomaly(True)
 
-
 # Import dataset from GNN explainer paper
 with open("../data/gnn_explainer/{}.pickle".format(args.dataset[:4]), "rb") as f:
 	data = pickle.load(f)
 
-adj = torch.Tensor(data["adj"]).squeeze()       # Does not include self loops
+adj = torch.Tensor(data["adj"]).squeeze() # Does not include self loops.
 features = torch.Tensor(data["feat"]).squeeze()
 labels = torch.tensor(data["labels"]).squeeze()
 idx_train = torch.tensor(data["train_idx"])
 idx_test = torch.tensor(data["test_idx"])
-edge_index = dense_to_sparse(adj)       # Needed for pytorch-geo functions
+edge_index = dense_to_sparse(adj) # Needed for pytorch-geo functions.
 
-# Change to binary task: 0 if not in house, 1 if in house
+# Change to binary task: 0 if not in house, 1 if in house.
 if args.dataset == "syn1_binary":
 	labels[labels==2] = 1
 	labels[labels==3] = 1
 
-norm_adj = normalize_adj(adj)       # According to reparam trick from GCN paper
-
+norm_adj = normalize_adj(adj) # According to reparam trick from GCN paper.
 
 # Set up original model, get predictions
-model = GCNSynthetic(nfeat=features.shape[1], nhid=args.hidden, nout=args.hidden,
-					 nclass=len(labels.unique()), dropout=args.dropout)
+model = GCNSynthetic(
+	nfeat=features.shape[1],
+	nhid=args.hidden,
+	nout=args.hidden,
+	nclass=len(labels.unique()),
+	dropout=args.dropout
+)
 
 model.load_state_dict(torch.load("../models/gcn_3layer_{}.pt".format(args.dataset)))
 model.eval()
 output = model(features, norm_adj)
 y_pred_orig = torch.argmax(output, dim=1)
+# Confirm model is actually doing something.
 print("y_true counts: {}".format(np.unique(labels.numpy(), return_counts=True)))
-print("y_pred_orig counts: {}".format(np.unique(y_pred_orig.numpy(), return_counts=True)))      # Confirm model is actually doing something
-
+print("y_pred_orig counts: {}".format(np.unique(y_pred_orig.numpy(), return_counts=True)))
 
 # Get CF examples in test set
 test_cf_examples = []
@@ -83,18 +87,19 @@ for i in idx_test[:]:
 		print("Output original model, full adj: {}".format(output[i]))
 		print("Output original model, sub adj: {}".format(model(sub_feat, normalize_adj(sub_adj))[new_idx]))
 
-
 	# Need to instantitate new cf model every time because size of P changes based on size of sub_adj
-	explainer = CFExplainer(model=model,
-							sub_adj=sub_adj,
-							sub_feat=sub_feat,
-							n_hid=args.hidden,
-							dropout=args.dropout,
-							sub_labels=sub_labels,
-							y_pred_orig=y_pred_orig[i],
-							num_classes = len(labels.unique()),
-							beta=args.beta,
-							device=args.device)
+	explainer = CFExplainer(
+		model=model,
+		sub_adj=sub_adj,
+		sub_feat=sub_feat,
+		n_hid=args.hidden,
+		dropout=args.dropout,
+		sub_labels=sub_labels,
+		y_pred_orig=y_pred_orig[i],
+		num_classes=len(labels.unique()),
+		beta=args.beta,
+		device=args.device
+	)
 
 	if args.device == 'cuda':
 		model.cuda()
@@ -106,15 +111,29 @@ for i in idx_test[:]:
 		idx_train = idx_train.cuda()
 		idx_test = idx_test.cuda()
 
-	cf_example = explainer.explain(node_idx=i, cf_optimizer=args.optimizer, new_idx=new_idx, lr=args.lr,
-	                               n_momentum=args.n_momentum, num_epochs=args.num_epochs)
+	cf_example = explainer.explain(
+		node_idx=i,
+		cf_optimizer=args.optimizer,
+		new_idx=new_idx,
+		lr=args.lr,
+		n_momentum=args.n_momentum,
+		num_epochs=args.num_epochs
+	)
 	test_cf_examples.append(cf_example)
 	print("Time for {} epochs of one example: {:.4f}min".format(args.num_epochs, (time.time() - start)/60))
+
 print("Total time elapsed: {:.4f}s".format((time.time() - start)/60))
 print("Number of CF examples found: {}/{}".format(len(test_cf_examples), len(idx_test)))
 
-# Save CF examples in test set
-
-with safe_open("../results/{}/{}/{}_cf_examples_lr{}_beta{}_mom{}_epochs{}_seed{}".format(args.dataset, args.optimizer, args.dataset,
-																	args.lr, args.beta, args.n_momentum, args.num_epochs, args.seed), "wb") as f:
+# Save CF examples in test set.
+with safe_open("../results/{}/{}/{}_cf_examples_lr{}_beta{}_mom{}_epochs{}_seed{}".format(
+	args.dataset,
+	args.optimizer,
+	args.dataset,
+	args.lr,
+	args.beta,
+	args.n_momentum,
+	args.num_epochs,
+	args.seed
+), "wb") as f:
 	pickle.dump(test_cf_examples, f)

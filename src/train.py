@@ -1,20 +1,23 @@
 # Based on https://github.com/tkipf/pygcn/blob/master/pygcn/train.py
 
-from __future__ import division
-from __future__ import print_function
+from __future__ import division, print_function
+
 import sys
+
 sys.path.append('..')
 import argparse
 import pickle
-import numpy as np
 import time
+
+import numpy as np
 import torch
-import torch.optim as optim
 import torch.nn.functional as F
+import torch.optim as optim
 from torch.nn.utils import clip_grad_norm
+from torch_geometric.utils import accuracy
+
 from gcn import GCNSynthetic
 from utils.utils import normalize_adj
-from torch_geometric.utils import accuracy
 
 # Defaults based on GNN Explainer
 parser = argparse.ArgumentParser()
@@ -34,7 +37,7 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 
 # Import dataset from GNN explainer paper
-with open("../data/gnn_explainer/{}.pickle".format(args.dataset[:4]), "rb") as f:
+with open("../data/gnn_explainer/{}.pickle".format(args.dataset), "rb") as f:
 	data = pickle.load(f)
 
 # For models trained using our GCN_synethic from GNNExplainer,
@@ -55,7 +58,6 @@ norm_adj = normalize_adj(adj)
 model = GCNSynthetic(nfeat=features.shape[1], nhid=args.hidden, nout=args.hidden,
                      nclass=len(labels.unique()), dropout=args.dropout)
 optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-
 
 if args.device == 'cuda':
 	model.cuda()
@@ -82,7 +84,6 @@ def train(epoch):
 		  'acc_train: {:.4f}'.format(acc_train),
 		  'time: {:.4f}s'.format(time.time() - t))
 
-
 def test():
 	model.eval()
 	output = model(features, norm_adj)
@@ -93,7 +94,6 @@ def test():
 		  "loss= {:.4f}".format(loss_test.item()),
 		  "accuracy= {:.4f}".format(acc_test))
 	return y_pred
-
 
 # Train model
 t_total = time.time()
