@@ -66,7 +66,7 @@ class CFExplainer:
 
 
 		best_cf_example = []
-		best_loss = np.inf
+		best_loss = torch.inf
 		num_cf_examples = 0
 		for epoch in range(num_epochs):
 			new_example, loss_total = self.train(epoch)
@@ -112,9 +112,9 @@ class CFExplainer:
 		if y_pred_new_actual != self.y_pred_orig:
 			cf_stats = [self.node_idx.item(), self.new_idx.item(),
 			            cf_adj.detach().numpy(), self.sub_adj.detach().numpy(),
-			            self.y_pred_orig.item(), y_pred_new.item(),
-			            y_pred_new_actual.item(), self.sub_labels[self.new_idx].numpy(),
-			            self.sub_adj.shape[0], loss_total.item(),
-			            loss_pred.item(), loss_graph_dist.item()]
+			            self.y_pred_orig.item(), y_pred_new.item(), y_pred_new_actual.item(),
+						self.sub_labels[self.new_idx].numpy(),
+			            self.sub_adj.shape[0],
+						loss_total.item(), loss_pred.item(), loss_graph_dist.item()]
 
 		return(cf_stats, loss_total.item())

@@ -13,8 +13,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.nn.utils import clip_grad_norm
-from torch_geometric.utils import accuracy
+from torch.nn.utils import clip_grad_norm_
 
 from gcn import GCNSynthetic
 from utils.utils import normalize_adj
@@ -28,11 +27,10 @@ parser.add_argument('--lr', type=float, default=0.001, help='Initial learning ra
 parser.add_argument('--hidden', type=int, default=20, help='Number of hidden units.')
 parser.add_argument('--dropout', type=float, default=0.0, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--weight_decay', type=float, default=0.001, help='Weight decay (L2 loss on parameters).')
-parser.add_argument('--clip', type=float, default=2.0, help='Gradient clip).')
-parser.add_argument('--device', default='cpu', help='CPU or GPU.')
+parser.add_argument('--clip', type=float, default=2.0, help='Gradient clip.')
+parser.add_argument('--device', default='cpu', choices=["cpu", "cuda:0", "cuda:1", "cuda:2", "cuda:3"], help='CPU or GPU.')
 args = parser.parse_args()
 
-args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 
@@ -59,7 +57,8 @@ model = GCNSynthetic(nfeat=features.shape[1], nhid=args.hidden, nout=args.hidden
                      nclass=len(labels.unique()), dropout=args.dropout)
 optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
-if args.device == 'cuda':
+if 'cuda' in args.device:
+	torch.cuda.set_device(args.device)
 	model.cuda()
 	features = features.cuda()
 	norm_adj = norm_adj.cuda()
@@ -74,9 +73,9 @@ def train(epoch):
 	output = model(features, norm_adj)
 	loss_train = model.loss(output[idx_train], labels[idx_train])
 	y_pred = torch.argmax(output, dim=1)
-	acc_train = accuracy(y_pred[idx_train], labels[idx_train])
+	acc_train = (y_pred[idx_train] == labels[idx_train]).sum() / len(y_pred[idx_train])
 	loss_train.backward()
-	clip_grad_norm(model.parameters(), args.clip)
+	clip_grad_norm_(model.parameters(), args.clip)
 	optimizer.step()
 
 	print('Epoch: {:04d}'.format(epoch+1),
@@ -89,7 +88,7 @@ def test():
 	output = model(features, norm_adj)
 	loss_test = F.nll_loss(output[idx_test], labels[idx_test])
 	y_pred = torch.argmax(output, dim=1)
-	acc_test = accuracy(y_pred[idx_test], labels[idx_test])
+	acc_test = (y_pred[idx_test] == labels[idx_test]).sum() / len(y_pred[idx_test])
 	print("Test set results:",
 		  "loss= {:.4f}".format(loss_test.item()),
 		  "accuracy= {:.4f}".format(acc_test))
@@ -107,6 +106,6 @@ torch.save(model.state_dict(), "../models/gcn_3layer_{}".format(args.dataset) + 
 # Testing
 y_pred = test()
 
-print("y_true counts: {}".format(np.unique(labels.numpy(), return_counts=True)))
-print("y_pred_orig counts: {}".format(np.unique(y_pred.numpy(), return_counts=True)))
+print("y_true counts: {}".format(torch.unique(labels, return_counts=True)))
+print("y_pred_orig counts: {}".format(torch.unique(y_pred, return_counts=True)))
 print("Finished training!")

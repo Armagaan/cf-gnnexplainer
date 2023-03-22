@@ -20,6 +20,7 @@ parser.add_argument('--dataset', default='syn1')
 
 # Based on original GCN models -- do not change
 parser.add_argument('--hidden', type=int, default=20, help='Number of hidden units.')
+#! This is never used in the model. The #layers is fixed to 3 for the blackbox and the explainer.
 parser.add_argument('--n_layers', type=int, default=3, help='Number of convolutional layers.')
 parser.add_argument('--dropout', type=float, default=0.0, help='Dropout rate (between 0 and 1)')
 
@@ -30,18 +31,17 @@ parser.add_argument('--optimizer', type=str, default="SGD", help='SGD or Adadelt
 parser.add_argument('--n_momentum', type=float, default=0.0, help='Nesterov momentum')
 parser.add_argument('--beta', type=float, default=0.5, help='Tradeoff for dist loss')
 parser.add_argument('--num_epochs', type=int, default=500, help='Num epochs for explainer')
-parser.add_argument('--device', default='cpu', help='CPU or GPU.')
+parser.add_argument('--device', default='cpu', choices=["cpu", "cuda:0", "cuda:1", "cuda:2", "cuda:3"], help='CPU or GPU.')
 args = parser.parse_args()
 
 print(args)
 
-args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 torch.autograd.set_detect_anomaly(True)
 
 # Import dataset from GNN explainer paper
-with open("../data/gnn_explainer/{}.pickle".format(args.dataset[:4]), "rb") as f:
+with open("../data/gnn_explainer/{}.pickle".format(args.dataset), "rb") as f:
 	data = pickle.load(f)
 
 adj = torch.Tensor(data["adj"]).squeeze() # Does not include self loops.
@@ -72,20 +72,20 @@ model.eval()
 output = model(features, norm_adj)
 y_pred_orig = torch.argmax(output, dim=1)
 # Confirm model is actually doing something.
-print("y_true counts: {}".format(np.unique(labels.numpy(), return_counts=True)))
-print("y_pred_orig counts: {}".format(np.unique(y_pred_orig.numpy(), return_counts=True)))
+print("y_true counts: {}".format(torch.unique(labels, return_counts=True)))
+print("y_pred_orig counts: {}".format(torch.unique(y_pred_orig, return_counts=True)))
 
 # Get CF examples in test set
 test_cf_examples = []
 start = time.time()
-for i in idx_test[:]:
+for i in idx_test:
 	sub_adj, sub_feat, sub_labels, node_dict = get_neighbourhood(int(i), edge_index, args.n_layers + 1, features, labels)
 	new_idx = node_dict[int(i)]
 
 	# Check that original model gives same prediction on full graph and subgraph
-	with torch.no_grad():
-		print("Output original model, full adj: {}".format(output[i]))
-		print("Output original model, sub adj: {}".format(model(sub_feat, normalize_adj(sub_adj))[new_idx]))
+	# with torch.no_grad():
+	# 	print("Output original model, full adj: {}".format(output[i]))
+	# 	print("Output original model, sub adj: {}".format(model(sub_feat, normalize_adj(sub_adj))[new_idx]))
 
 	# Need to instantitate new cf model every time because size of P changes based on size of sub_adj
 	explainer = CFExplainer(
